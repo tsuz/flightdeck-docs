@@ -4,46 +4,81 @@ sidebar_position: 2
 
 # Think
 
-The **Think** layer is the decision-making core of each agent. It is the LLM call that determines what to do next based on the available information.
+The **Think** layer is a function that calls the LLM. It is the decision-making core of each agent — the single call that determines what to do next.
 
-## How It Works
+LLM APIs are stateless. They have no memory of previous calls. This means everything the agent needs to reason — current context, conversation history, tool results, prompts, and any other relevant information — must be assembled and presented in one call. The Think function is responsible for gathering all of this and sending it to the LLM as a single request.
 
-When an agent receives a task, the Think layer:
+## Default Behavior
 
-1. **Evaluates the current context** — the task description, conversation history, outputs from previous agents, and any relevant state
-2. **Decides the next action** — whether to call a tool, request more information, delegate to another agent, or produce a final response
-3. **Executes the decision** — invokes the chosen tool or generates output, then re-evaluates based on the result
+Flightdeck ships with a default Think implementation that handles the LLM call for you. You can configure it entirely through environment variables without touching any code:
 
-This loop continues until the agent determines the task is complete.
+- **`CLAUDE_API_KEY`** — Your Anthropic API key for authenticating with the Claude API
+- **`CLAUDE_MODEL`** — The Claude model to use (e.g., `claude-sonnet-4-6`, `claude-opus-4-6`)
+- **`CLAUDE_PROMPT`** — The system prompt that guides the agent's behavior and reasoning
 
-## What the LLM Sees
+Set these in your `.env` file and the default Think function will use them automatically.
 
-Each Think step provides the LLM with:
+The default `CLAUDE_PROMPT` is:
 
-- **System prompt** — the agent's role, goal, and behavioral instructions
-- **Available tools** — the set of functions the agent can call, with their schemas and descriptions
-- **Task context** — the current task description and any outputs from upstream agents
-- **Conversation history** — prior Think steps, tool calls, and their results within the current task
+```
+You are an intelligent AI assistant with access to various tools.
+Analyze the user's request and determine the best course of action.
+Use the available tools when needed to fulfill the user's request.
+If you can answer directly without tools, do so.
 
-The LLM uses all of this to decide the most appropriate next action.
+Be concise and helpful. When using tools, explain what you're doing and why.
 
-## Think vs Business Logic
+%s
+```
 
-The Think layer is intentionally separate from your business logic:
+All other information — conversation history, tool definitions, task context — is appended at the `%s` placeholder at the end of the prompt. You can override this default with your own prompt via the `CLAUDE_PROMPT` environment variable while keeping the same `%s` pattern.
 
-| Think (LLM) | Business Logic (Developer) |
+## Custom Behavior
+
+If the default Think implementation doesn't fit your needs, you can write your own by implementing a custom think consumer. The message your consumer receives looks like this:
+
+```json
+{
+  "session_id": "session-20260320-143022",
+  "user_id": "user-alice",
+  "history": [
+    {
+      "session_id": "session-20260320-143022",
+      "user_id": "user-alice",
+      "role": "user",
+      "content": "What's the weather like in Tokyo?",
+      "timestamp": "2026-03-20T14:30:22Z",
+      "metadata": {}
+    },
+    {
+      "session_id": "session-20260320-143022",
+      "user_id": "user-alice",
+      "role": "assistant",
+      "content": "It's currently 18°C and partly cloudy in Tokyo.",
+      "timestamp": "2026-03-20T14:30:25Z",
+      "metadata": {}
+    }
+  ],
+  "latest_input": {
+    "session_id": "session-20260320-143022",
+    "user_id": "user-alice",
+    "role": "user",
+    "content": "Should I bring an umbrella tomorrow?",
+    "timestamp": "2026-03-20T14:31:10Z",
+    "metadata": {}
+  },
+  "memoir_context": "Alice lives in Tokyo. She frequently asks about weather and commute conditions. Prefers concise answers.",
+  "timestamp": "2026-03-20T14:31:10Z"
+}
+```
+
+| Field | Description |
 |---|---|
-| Decides *which* tool to call | Defines *what* the tool does |
-| Chooses the order of operations | Defines the available operations |
-| Interprets ambiguous inputs | Defines the rules and constraints |
-| Adapts to unexpected results | Defines the expected workflow |
+| `session_id` | Identifies the current conversation session |
+| `user_id` | Identifies the user |
+| `history` | Full conversation history for the session — previous user and assistant messages |
+| `latest_input` | The most recent user message that triggered this Think call |
+| `memoir_context` | Long-term context about the user, retrieved from memory (e.g. preferences, past behavior) |
+| `timestamp` | When the message was produced |
 
-The developer provides the tools and prompts. The LLM reasons about when and how to use them.
-
-## Example
-
-Given an agent with access to `search_email` and `send_email` tools, and the user input "Reply to John's last email saying I'll be there":
-
-1. **Think** — I need to find John's last email first → call `search_email("from:John", limit=1)`
-2. **Think** — I found the email about a meeting on Friday. I need to reply → call `send_email(to="john@...", subject="Re: Friday Meeting", body="I'll be there")`
-3. **Think** — The email was sent successfully. The task is complete → return final response
+With this payload, you can implement your own logic — use a different LLM provider, add custom prompt assembly, apply guardrails, or route to different models based on the input. See the [think consumer source code](https://github.com/tsuz/ai-agent-orchestration-kafka-example) for a reference implementation.

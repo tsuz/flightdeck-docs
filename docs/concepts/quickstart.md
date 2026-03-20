@@ -1,8 +1,8 @@
 ---
-sidebar_position: 2
+sidebar_position: 0
 ---
 
-# Quickstart
+# Quick Start
 
 Get a multi-agent system running in under 5 minutes.
 
