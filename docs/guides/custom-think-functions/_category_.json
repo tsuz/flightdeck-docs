@@ -1,0 +1,9 @@
+{
+  "label": "Building Custom Think Functions",
+  "position": 0,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Flightdeck ships with a default Think function (see <a href=\"/docs/concepts/think#default-behavior\">Default Behavior</a>), but you may need to customize it — use a different LLM provider, add guardrails, or change how prompts are assembled. In that case, you can create your own Think function. It must: 1) read messages from the Kafka input topic, 2) process the message (call the LLM, apply your logic), and 3) write the result to the resulting Kafka topic. Choose your language below to get started."
+  }
+}

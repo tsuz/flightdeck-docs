@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Building Custom Tools
+# Building Custom Tool Functions
 
 This guide walks through creating custom tools for your Flightdeck agents.
 
