@@ -5,11 +5,11 @@ slug: /intro
 
 # Introduction
 
-**Flightdeck** is an open-source AI agent orchestration layer that makes it easy to build, compose, and manage multi-agent systems.
+**Flightdeck** is an open-source AI agent framework layer that makes it easy to build, compose, and manage multi-agent systems.
 
 ## Why Flightdeck?
 
-Flightdeck is an orchestration layer purpose-built for running AI agents in production. It addresses four critical areas:
+Flightdeck is an framework layer purpose-built for running AI agents in production. It addresses four critical areas:
 
 ### Reliability
 
@@ -19,7 +19,7 @@ Production agent systems need to handle failure gracefully and maintain consiste
 - **Scalability** — Horizontal scaling of agent workloads with built-in queue management and resource-aware scheduling
 - **Fault tolerance** — Automatic retries with exponential backoff, circuit breakers for downstream services, and graceful degradation when individual agents fail
 
-### Multi-Agent Orchestration
+### Multi-Agent Framework
 
 Complex tasks benefit from specialized agents working together rather than a single monolithic prompt:
 

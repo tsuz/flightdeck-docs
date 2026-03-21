@@ -1,0 +1,9 @@
+{
+  "label": "Building Tool Functions",
+  "position": 0,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Tool functions are the execution layer that runs when the LLM directs an action. Each tool consumer reads from a Kafka topic, runs your business logic, and writes the result back. Choose your language below."
+  }
+}

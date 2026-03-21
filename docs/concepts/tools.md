@@ -10,7 +10,7 @@ Tools are the layer that performs actions, directed by the LLM. When the LLM dec
 
 Tools must exist in **both** layers to work:
 
-1. **When calling the LLM** — The tool definition (name, description, input schema) must be provided to the LLM so it knows the tool is available and can decide when to use it. Without this, the LLM has no way to direct the action.
+1. **Provide LLM with Tool List** — The tool definition (name, description, input schema) must be provided to the LLM so it knows the tool is available and can decide when to use it. Without this, the LLM has no way to direct the action.
 
 You provide tool definitions to the Think layer via the **`TOOLS_JSON_FILE`** environment variable. Set it to the path of a JSON file that contains all your tool definitions:
 
@@ -67,7 +67,7 @@ Here's an example of what that file looks like:
 
 The Think layer reads this file at startup and includes the tool definitions in every LLM call so the model knows what actions are available.
 
-2. **In the Tools execution function** — The corresponding execution function must exist in your consumer so there is actual code to run when the LLM calls the tool. If the LLM directs a call to a function that doesn't exist, the call will fail. See the [Building Custom Tool Functions](/docs/guides/custom-tools) guide on how to implement this.
+2. **In the Tools execution function** — The corresponding execution function must exist in your consumer so there is actual code to run when the LLM calls the tool. If the LLM directs a call to a function that doesn't exist, the call will fail. See the [Building Tool Functions](/docs/guides/category/building-tool-functions) guide on how to implement this.
 
 The tool definition tells the LLM *what it can do*. The execution function defines *what actually happens*. Both must be present, and the `name` field is what connects them.
 
