@@ -37,7 +37,6 @@ Hi can I send an email?
 
 ## What's Next?
 
-- [Agents](/docs/concepts/agents) — Learn how agents work in depth
-- [Tasks](/docs/concepts/tasks) — Understand task configuration and dependencies
-- [Crews](/docs/concepts/crews) — Orchestrate agents into workflows
-- [Tools](/docs/concepts/tools) — Connect agents to external capabilities
+- [Think](/docs/concepts/think) — Understand the LLM decision-making layer
+- [Tools](/docs/concepts/tools) — Learn how tool definitions and execution functions work
+- [Guides](/docs/category/guides) — Step-by-step tutorials for common patterns

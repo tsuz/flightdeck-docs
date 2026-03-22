@@ -26,8 +26,8 @@ function HomepageHeader() {
           <Link
             className="button button--outline button--secondary button--lg"
             style={{marginLeft: '1rem', color: 'white', borderColor: 'white'}}
-            to="/docs/quickstart">
-            Quickstart (5 min)
+            to="/docs/concepts/quickstart">
+            Quick Start (5 min)
           </Link>
         </div>
       </div>
@@ -47,7 +47,7 @@ function CodeExample() {
               and orchestrate multi-agent systems with a simple Python API.
               Connect any LLM provider, add tools, and let your agents collaborate.
             </p>
-            <Link className="button button--primary" to="/docs/quickstart">
+            <Link className="button button--primary" to="/docs/concepts/quickstart">
               See the full quickstart
             </Link>
           </div>

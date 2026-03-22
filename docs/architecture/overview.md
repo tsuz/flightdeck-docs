@@ -73,7 +73,7 @@ Together, these layers manage the lifecycle of agents and tasks, handling execut
 
 ### Agents
 
-Each agent is an autonomous unit with a specific role, goal, and set of tools. Agents are backed by an LLM of your choice and can be mixed and matched across providers within a single workflow. See [Agents](/docs/concepts/agents) for details.
+Each agent is an autonomous unit with a specific role, goal, and set of tools. Agents are backed by an LLM of your choice and can be mixed and matched across providers within a single workflow. See [Tools](/docs/concepts/tools) for details.
 
 ### Task Router
 

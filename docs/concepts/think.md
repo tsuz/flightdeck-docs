@@ -35,4 +35,4 @@ All other information â€” conversation history, tool definitions, task context â
 
 ## Custom Behavior
 
-If you need to modify the LLM behavior or process multi-modal inputs like images, audio, or video, a custom Think function may be needed. See [Building custom Think functions](/docs/guides/custom-think-functions) guide for full examples.
+If you need to modify the LLM behavior or process multi-modal inputs like images, audio, or video, a custom Think function may be needed. See [Building custom Think functions](/docs/category/building-custom-think-functions) guide for full examples.

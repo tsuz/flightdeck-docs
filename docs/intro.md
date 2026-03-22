@@ -70,7 +70,6 @@ Flightdeck is designed to get out of your way so you can focus on what your agen
 
 ## Next Steps
 
-- [**Quickstart**](/docs/quickstart) — Build your first multi-agent system in 5 minutes
-- [**Core Concepts**](/docs/concepts/agents) — Understand agents, tasks, crews, and tools
-- [**Guides**](/docs/guides/custom-tools) — Step-by-step tutorials for common patterns
-- [**API Reference**](/docs/api/client) — Full API documentation
+- [**Quick Start**](/docs/concepts/quickstart) — Get running in 5 minutes
+- [**Get Started**](/docs/category/get-started) — Understand Think, Tools, and how they work together
+- [**Guides**](/docs/category/guides) — Step-by-step tutorials for common patterns

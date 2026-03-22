@@ -72,16 +72,16 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Getting Started',
+              label: 'Introduction',
               to: '/docs/intro',
             },
             {
-              label: 'Core Concepts',
-              to: '/docs/concepts/agents',
+              label: 'Get Started',
+              to: '/docs/category/get-started',
             },
             {
-              label: 'API Reference',
-              to: '/docs/api/client',
+              label: 'Guides',
+              to: '/docs/category/guides',
             },
           ],
         },
@@ -90,11 +90,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub Discussions',
-              href: 'https://github.com/flightdeck/flightdeck/discussions',
-            },
-            {
-              label: 'Discord',
-              href: 'https://discord.gg/flightdeck',
+              href: 'https://github.com/tsuz/flightdeck-docs/discussions',
             },
           ],
         },
@@ -103,11 +99,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/flightdeck/flightdeck',
-            },
-            {
-              label: 'Contributing',
-              to: '/docs/contributing',
+              href: 'https://github.com/tsuz/flightdeck-docs',
             },
           ],
         },
