@@ -10,7 +10,7 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Multi-Agent Orchestration',
+    title: 'Multi-Agent Framework',
     description: (
       <>
         Define agents with distinct roles, goals, and tools. Compose them

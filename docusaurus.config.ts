@@ -4,18 +4,18 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Flightdeck',
-  tagline: 'Open-Source AI Agent Orchestration Layer',
+  tagline: 'Open-Source AI Agent Framework Layer',
   favicon: 'img/favicon.ico',
 
   future: {
     v4: true,
   },
 
-  url: 'https://flightdeck.dev',
-  baseUrl: '/',
+  url: 'https://tsuz.github.io',
+  baseUrl: '/flightdeck-docs/',
 
-  organizationName: 'flightdeck',
-  projectName: 'flightdeck',
+  organizationName: 'tsuz',
+  projectName: 'flightdeck-docs',
 
   onBrokenLinks: 'throw',
 

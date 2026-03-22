@@ -95,8 +95,8 @@ export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title="AI Agent Orchestration"
-      description="Flightdeck is an open-source AI agent orchestration layer for building, composing, and managing multi-agent systems.">
+      title="AI Agent Framework"
+      description="Flightdeck is an open-source AI agent framework layer for building, composing, and managing multi-agent systems.">
       <HomepageHeader />
       <main>
         <HomepageFeatures />
