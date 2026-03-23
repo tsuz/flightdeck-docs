@@ -29,6 +29,7 @@ const config: Config = {
       'classic',
       {
         docs: {
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/flightdeck/flightdeck/tree/main/docs/',
         },
@@ -73,15 +74,15 @@ const config: Config = {
           items: [
             {
               label: 'Introduction',
-              to: '/docs/intro',
+              to: '/',
             },
             {
               label: 'Get Started',
-              to: '/docs/category/get-started',
+              to: '/category/get-started',
             },
             {
               label: 'Guides',
-              to: '/docs/category/guides',
+              to: '/category/guides',
             },
           ],
         },
@@ -108,7 +109,7 @@ const config: Config = {
     },
     prism: {
       theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      darkTheme: prismThemes.oneDark,
       additionalLanguages: ['bash', 'python', 'yaml', 'json'],
     },
   } satisfies Preset.ThemeConfig,

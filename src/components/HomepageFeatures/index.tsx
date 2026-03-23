@@ -46,15 +46,6 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Observability & Tracing',
-    description: (
-      <>
-        Full execution traces, token usage tracking, and OpenTelemetry integration.
-        Debug multi-agent workflows with detailed step-by-step logs.
-      </>
-    ),
-  },
-  {
     title: 'Open Source & Extensible',
     description: (
       <>
