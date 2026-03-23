@@ -1,11 +1,11 @@
 ---
 sidebar_position: 1
-slug: /intro
+slug: /
 ---
 
 # Introduction
 
-**Flightdeck** is an open-source AI agent framework layer that makes it easy to build, compose, and manage multi-agent systems.
+**Flightdeck** is an open-source AI agent orchestrator that makes it easy to build and compose without worrying about states and infrastructure.
 
 ## Why Flightdeck?
 
@@ -18,14 +18,6 @@ Production agent systems need to handle failure gracefully and maintain consiste
 - **State management** — Persistent, checkpointed execution state so agents can resume from where they left off after interruptions
 - **Scalability** — Horizontal scaling of agent workloads with built-in queue management and resource-aware scheduling
 - **Fault tolerance** — Automatic retries with exponential backoff, circuit breakers for downstream services, and graceful degradation when individual agents fail
-
-### Multi-Agent Framework
-
-Complex tasks benefit from specialized agents working together rather than a single monolithic prompt:
-
-- **Role-based agents** — Define agents with distinct roles, goals, and tool access, each optimized for their part of the workflow
-- **Flexible execution** — Sequential pipelines, parallel fan-out/fan-in, hierarchical delegation, and conditional routing
-- **Inter-agent communication** — Structured context passing between agents with typed inputs and outputs
 
 ### Observability
 
@@ -44,32 +36,3 @@ Flightdeck is designed to get out of your way so you can focus on what your agen
 - **No complex abstractions** — Business logic and infrastructure are cleanly separated. Define what your agents do in plain, straightforward code while Flightdeck handles execution, scaling, and recovery behind the scenes
 - **Language agnostic** — First-class SDKs for Python, TypeScript, and Go. Define agents in whichever language your team already uses, and mix languages within the same workflow
 - **Unit testing** — Test agents, tools, and workflows in isolation with built-in mocks for LLM calls and tool responses. Validate behavior deterministically without burning tokens or hitting external services
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────┐
-│              Your Application            │
-├─────────────────────────────────────────┤
-│           Flightdeck Crew               │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐   │
-│  │ Agent A  │ │ Agent B │ │ Agent C │   │
-│  │ (Claude) │ │ (GPT-4) │ │ (Llama) │   │
-│  └────┬─────┘ └────┬────┘ └────┬────┘   │
-│       │            │           │         │
-│  ┌────┴────────────┴───────────┴────┐    │
-│  │          Task Router             │    │
-│  └────┬────────────┬───────────┬────┘    │
-│       │            │           │         │
-│  ┌────┴────┐ ┌─────┴───┐ ┌────┴────┐    │
-│  │  Tools  │ │ Memory  │ │ Traces  │    │
-│  └─────────┘ └─────────┘ └─────────┘    │
-├─────────────────────────────────────────┤
-│        LLM Providers (Any Model)        │
-└─────────────────────────────────────────┘
-```
-
-## Next Steps
-
-- [**Quick Start**](/docs/concepts/quickstart) — Get running in 5 minutes
-- [**Get Started**](/docs/category/get-started) — Understand Think, Tools, and how they work together
-- [**Guides**](/docs/category/guides) — Step-by-step tutorials for common patterns

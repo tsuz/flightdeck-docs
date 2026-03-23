@@ -7,7 +7,6 @@ sidebar_position: 2
 The **Think** layer is a function that calls the LLM. It is the decision-making core of each agent — the single call that determines what to do next.
 
 LLM APIs are stateless. They have no memory of previous calls. This means everything the agent needs to reason — current context, conversation history, tool results, prompts, and any other relevant information — must be assembled and presented in one call. The Think function is responsible for gathering all of this and sending it to the LLM as a single request.
-
 ## Default Behavior
 
 Flightdeck ships with a default Think implementation that handles the LLM call for you. You can configure it entirely through environment variables without touching any code:
