@@ -37,6 +37,6 @@ Hi can I send an email?
 
 ## What's Next?
 
-- [Think](/docs/concepts/think) — Understand the LLM decision-making layer
-- [Tools](/docs/concepts/tools) — Learn how tool definitions and execution functions work
-- [Guides](/docs/category/guides) — Step-by-step tutorials for common patterns
+- [Think](/concepts/think) — Understand the LLM decision-making layer
+- [Tools](/concepts/tools) — Learn how tool definitions and execution functions work
+- [Guides](/category/guides) — Step-by-step tutorials for common patterns

@@ -73,7 +73,7 @@ Together, these layers manage the lifecycle of agents and tasks, handling execut
 
 ### Agents
 
-Each agent is an autonomous unit with a specific role, goal, and set of tools. Agents are backed by an LLM of your choice and can be mixed and matched across providers within a single workflow. See [Tools](/docs/concepts/tools) for details.
+Each agent is an autonomous unit with a specific role, goal, and set of tools. Agents are backed by an LLM of your choice and can be mixed and matched across providers within a single workflow. See [Tools](/concepts/tools) for details.
 
 ### Task Router
 
@@ -89,7 +89,7 @@ Flightdeck persists execution state at each step so workflows can recover from f
 
 ### Tools
 
-Tools are the interface between agents and the outside world — APIs, databases, file systems, code execution, and any custom function. See [Tools](/docs/concepts/tools) for details.
+Tools are the interface between agents and the outside world — APIs, databases, file systems, code execution, and any custom function. See [Tools](/concepts/tools) for details.
 
 ### Observability
 
