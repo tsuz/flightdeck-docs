@@ -23,7 +23,7 @@ Note that the price calculation includes decimal places, so it may have some flo
 
 ## Budgeting
 
-The developer can set the `BUDGET_PRICE_PER_SESSION` environment variable to limit usage by pricing per session. When the session's cumulative cost surpasses this limit, Flightdeck detects it and stops the session. If not provided, the default is unlimited usage.
+The developer can set the `BUDGET_PRICE_PER_SESSION` environment variable to limit usage by pricing per session. When the session's cumulative cost surpasses this limit, Flightdeck detects it and stops the session. If not provided, the default is unlimited usage. `INPUT_TOKEN_PRICE` and `OUTPUT_TOKEN_PRICE` are required for `BUDGET_PRICE_PER_SESSION` to work.
 
 The following example ends the session if the total cost exceeds $5:
 
