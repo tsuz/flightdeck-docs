@@ -7,17 +7,31 @@ sidebar_position: 2
 The **Think** layer is a function that calls the LLM. It is the decision-making core of each agent — the single call that determines what to do next.
 
 LLM APIs are stateless. They have no memory of previous calls. This means everything the agent needs to reason — current context, conversation history, tool results, prompts, and any other relevant information — must be assembled and presented in one call. The Think function is responsible for gathering all of this and sending it to the LLM as a single request.
-## Default Behavior
+## Choosing the LLM
 
 Flightdeck ships with a default Think implementation that handles the LLM call for you. You can configure it entirely through environment variables without touching any code:
 
-- **`CLAUDE_API_KEY`** — Your Anthropic API key for authenticating with the Claude API
-- **`CLAUDE_MODEL`** — The Claude model to use (e.g., `claude-sonnet-4-6`, `claude-opus-4-6`)
-- **`CLAUDE_PROMPT`** — The system prompt that guides the agent's behavior and reasoning
+- **`LLM_PROVIDER`** — LLM provider to use — `claude` or `gemini`. Default: `claude`
+
+If `claude` is used as the LLM provider, the following configs are applied:
+
+- **`CLAUDE_API_KEY`** — Your Anthropic API key *(required for Claude)*
+- **`CLAUDE_MODEL`** — Claude model to use. Default: `claude-haiku-4-5-20251001`
+- **`CLAUDE_MAX_TOKENS`** — Max tokens per Claude response. Default: `4096`
+- **`CLAUDE_API_URL`** — Claude API endpoint. Default: `https://api.anthropic.com/v1/messages`
+
+If `gemini` is used as the LLM provider, the following configs are applied:
+
+- **`GEMINI_API_KEY`** — Your Google Gemini API key *(required for Gemini)*
+- **`GEMINI_MODEL`** — Gemini model to use. Default: `gemini-2.5-flash`
+- **`GEMINI_MAX_TOKENS`** — Max tokens per Gemini response. Default: `4096`
+- **`GEMINI_API_URL`** — Gemini API endpoint. Default: `https://generativelanguage.googleapis.com/v1beta`
 
 Set these in your `.env` file and the default Think function will use them automatically.
 
-The default `CLAUDE_PROMPT` is:
+## Prompts
+
+The default system prompt is:
 
 ```
 You are an intelligent AI assistant with access to various tools.
@@ -26,11 +40,15 @@ Use the available tools when needed to fulfill the user's request.
 If you can answer directly without tools, do so.
 
 Be concise and helpful. When using tools, explain what you're doing and why.
-
-%s
 ```
 
-All other information — conversation history, tool definitions, task context — is appended at the `%s` placeholder at the end of the prompt. You can override this default with your own prompt via the `CLAUDE_PROMPT` environment variable while keeping the same `%s` pattern.
+Conversation history, tool definitions, and task context are automatically appended below the system prompt.
+
+You can override the default by setting `SYSTEM_PROMPT_FILE` to the path of a file containing your custom system prompt:
+
+```bash
+SYSTEM_PROMPT_FILE=./my-prompt.txt
+```
 
 ## Custom Behavior
 
