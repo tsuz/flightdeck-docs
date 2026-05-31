@@ -4,20 +4,15 @@ sidebar_position: 6
 
 # Multi-Agent Communication
 
-FlightDeck lets one agent call another agent **as an asynchronous tool**. The
-calling agent ("Agent A") delegates a task; the called agent ("Agent B") runs as
-an ordinary agent and its answer flows back as the tool's result — without A
+Flightdeck simplifies AI agent communication through a secure, reliable, and scalable design.
+The calling agent ("Agent A") delegates a task; the called agent ("Agent B") runs as
+an ordinary agent and its answer flows back as the tool's result through a REST API enpoint.
+— without A
 holding a thread open while B works.
 
-The guiding principle:
+## Design
 
-> **Agent A treats Agent B as a generic async tool. Agent B treats the request as
-> a generic chat. Neither needs to know the other is an agent.**
-
-This keeps the two agents fully decoupled: A's tooling and B's agent logic each
-stay unaware of the orchestration between them.
-
-## The round trip
+Below is the design and assume two Flightdeck agents (Agent A and B) are used.
 
 ```
   Agent A (caller)                         Agent B (callee — an ordinary agent)
@@ -46,20 +41,105 @@ stay unaware of the orchestration between them.
    (or times out → synthesized error)
 ```
 
+
+## Guiding Principals
+
+- Agent A treats Agent B as a generic async tool. Agent B treats the request as a generic chat. Neither needs to know the other is an agent.
+- Agent A cannot assume that Agent B has the deterministic ability to return its response in a specified format, such as a structured JSON schema. Therefore, a human-readable output—a plan string—is assumed.
+- Agent A and B do not share a Kafka cluster, nor are they allowed to access each other's topics.
+- Agent A and B do not share a language specific protocol.
+- Agent A needs to consider that Agent B can get stuck and response does not get returned.
+- Agent A assumes Agent B gets be compromised.
+
 ## Design choices
 
-### Asynchronous, not blocking
+### Asynchronous dispatch
 
-A's delegating tool does **not** publish a `tool-use-result` when it dispatches.
+A's tool, the delegator, does **not** publish a `tool-use-result` when it dispatches.
 It acks the `tool-use` offset so the dispatch is not redelivered, then returns —
-the "pending" ack. No worker thread is held open for the duration of the
+the "pending" ack. No consumer is held open for the duration of the
 sub-call. The result is published later, by the callback. This is what lets a
 delegated task take seconds or minutes without tying up A's tool consumer.
 
-### The callback token is a capability; the secret stays with A
+Time flows downward; each column is one participant. `┃` = consumer occupied,
+`┊` = consumer freed.
 
-When A dispatches, it mints an HMAC-SHA256 token carrying the correlation fields
-it needs to match the eventual result:
+```
+     consumer            external            tool-use-result     tool-use            Agent A API         Agent B
+     thread              endpoint            topic               offset              endpoint
+     │                   │                   │                   │                   │                   │
+     read tool-use       │                   │                   │                   │                   │
+     │                   │                   │                   │                   │                   │
+     │──POST task───────▶│                   │                   │                   │                   │
+     │                   │──dispatch to B────┼───────────────────┼───────────────────┼───────────────────▶
+     │◀──202 pending─────│                   │                   │                   │                   │
+     │                   │                   │                   │                   │                   │
+     │───commit offset───┼───────────────────┼───────────────────▶                   │                   │
+     │  (NO result yet)  │                   │                   │                   │                   │
+     │                   │                   │                   │                   │                   │
+     ┊ consumer free     │                   │                   │                   │                   │
+     ┊                   │                   │                   │                   │ B works (seconds … minutes)
+     ┊                   │                   │                   │                   ◀──result───────────│
+     ┊                   │                   ◀──write result─────┼───────────────────│                   │
+     ┊                   │                   │ turn completes    │                   │                   │
+```
+
+The offset is committed **before** any `tool-use-result` exists; the result is
+written later, when B's callback arrives. Note that B never touches A's topics —
+it POSTs to **A's API endpoint**, and that endpoint is what writes into the
+`tool-use-result` topic. Contrast the synchronous alternative,
+where the consumer stays occupied and both the write and the commit happen only
+after B responds:
+
+```
+     consumer            external            tool-use-result     tool-use
+     thread              endpoint            topic               offset
+     │                   │                   │                   │
+     read tool-use       │                   │                   │
+     │                   │                   │                   │
+     │──POST task───────▶│                   │                   │
+     ┃ waiting           │ B works (seconds … minutes)           │
+     ┃◀──result──────────│                   │                   │
+     │───write result────┼───────────────────▶                   │
+     │───commit offset───┼───────────────────┼───────────────────▶
+     │ done (only now)   │                   │                   │
+```
+
+A parallel consumer can still serve other tools while one is parked on B, so
+this isn't about head-of-line stalls. The win is resource cost: the async
+version doesn't keep a consumer occupied — and an open connection to B — for the
+minutes a sub-call can take.
+
+### Securing Agent A from Agent B Callback
+
+When Agent A dispatches to Agent B, it sends a message-specific token signed by
+the key stored in Agent A. The token carries the correlation fields A needs to
+match the eventual result, so when the callback arrives A can verify it really
+came from this dispatch (the sender is who it claims to be) without storing any
+state of its own — everything needed to match the result travels in the token.
+Agent B, for its part, only needs to emit its result and echo the token back:
+
+```
+  Agent A (holds TOOL_CALLBACK_SECRET)        Agent B (no secret)
+  ────────────────────────────────────        ───────────────────
+  tool service:
+    token = payload "." HMAC(secret, payload)
+        │
+        │  token (opaque) ──────────────────▶ stores token,
+        │                                      echoes it back
+        │                                      verbatim
+        │                                          │
+        │  ◀───────────────── token + result ──────┘
+        ▼
+  chat-api:
+    recompute HMAC(secret, payload)
+    match? → accept   mismatch? → reject
+  ────────────────────────────────────
+  B can carry the token but cannot read,
+  forge, or alter it — a blind courier.
+```
+
+The token carries these correlation fields:
 
 | Field | Meaning |
 |-------|---------|
@@ -79,12 +159,77 @@ Agent B never sees the secret — it cannot read, forge, or alter the token. B i
 blind courier that echoes the opaque token back. The HMAC is computed over the
 exact transmitted bytes, so JSON key ordering is irrelevant to verification.
 
-### Reply routing is transport, not prompt
+Even if the HMAC token is compromised on Agent B, Agent A can dedupe results by
+`tool_use_id`: the first callback for a tool call is accepted and every
+subsequent one is ignored. A forged or replayed callback therefore can only race
+a result A already has, which significantly lowers the chance of compromising the
+workflow.
+
+This dedupe is not yet in place. Even without it, though, the exposure is
+narrow: by the time a duplicate result could arrive, A has already consumed the
+original tool result and moved on to the next iteration of thinking, so a late
+forged callback has nothing live to influence.
+
+### Stateful Reply is Stored on the Edge
+
+B's chat-api stores the reply descriptor on its `reply-to` topic, keyed by
+`session_id`. It never enters B's prompt, and B has no "call back the caller"
+tool. At end-turn, `EndTurnProcessor` left-joins the descriptor into
+`message-output`, and B's `OutputConsumer` performs the delivery. Routing lives
+in the delivery layer, so B stays a vanilla agent.
+
+Because the reply target belongs to B's **session** (not to any single message),
+it is set once at task start and read once at the terminal output — it does not
+have to survive B's internal think→tool loops.
+
+```
+  /api/chat request received by Agent B
+        │
+        ├─ content ─────────▶ B's prompt ──▶ think → tool → think → …
+        │                     (routing never enters here)            │
+        │                                                            ▼
+        │                                      think-request-response topic
+        │                                                            │
+        └─ reply descriptor ─▶ reply-to topic                        │
+                               (keyed by session_id)                 │
+                                       │                             │
+                                       └─────────────┬───────────────┘
+                                                     ▼
+                                       EndTurnProcessor left-joins
+                                       reply-to into output-message
+                                                     │
+                                                     ▼
+                                            output-message topic
+                                                     │
+                                                     ▼
+                                       OutputConsumer consumes it,
+                                       POSTs the answer back to Agent A
+```
+
+Once it has delivered, `OutputConsumer` writes a tombstone back into the
+`reply-to` topic for that `session_id`. Because the topic is keyed and compacted,
+the tombstone retires the route, so the stored reply state does not grow without
+bound as sessions complete.
+
+> **Bottleneck.** Today `/api/tools/response` accepts only one message at a time,
+> which caps how fast `OutputConsumer` can drain its output. Enabling batching on
+> the API side — accepting many results per request — would increase total
+> throughput significantly. This still needs to be implemented.
+
+> **Where the tombstone belongs.** The tombstone is currently emitted by
+> `OutputConsumer` after delivery. It would more naturally live on
+> `EndTurnProcessor`, the left-join processor that joins `think-request-response`
+> with `reply-to` — that processor already owns the reply-route state, so retiring
+> the route there keeps cleanup next to the state it manages rather than deferring
+> it to the delivery step.
 
 A tells B where to send the answer with a `reply` descriptor on the `/api/chat`
 request — **not** in the message content:
 
 ```json
+// POST /api/chat  — received by Agent B
+// Host: agent-b-host:8000
+// Content-Type: application/json
 {
   "session_id": "<a fresh session for B's sub-conversation>",
   "content": "<the task for B>",
@@ -99,65 +244,84 @@ request — **not** in the message content:
 }
 ```
 
-B's chat-api stores this descriptor on its `reply-to` topic, keyed by
-`session_id`. It never enters B's prompt, and B has no "call back the caller"
-tool. At end-turn, `EndTurnProcessor` left-joins the descriptor into
-`message-output`, and B's `OutputConsumer` performs the delivery. Routing lives
-in the delivery layer, so B stays a vanilla agent.
+The `reply` descriptor names the callback B hits when it finishes — A's
+`/api/tools/response` endpoint, carrying the HMAC token as a bearer credential:
 
-Because the reply target belongs to B's **session** (not to any single message),
-it is set once at task start and read once at the terminal output — it does not
-have to survive B's internal think→tool loops.
-
-### The answer is free-form; A shapes it
-
-B returns ordinary prose — no JSON contract is imposed on B's LLM. B's
-`OutputConsumer` wraps the answer under the caller-named field
-(`responseAsField`, e.g. `{ "result": "<answer>" }`) and POSTs it to
-`/api/tools/response`. A verifies the token and writes a canonical
-`tool-use-result` whose `result` carries B's response.
-
-### Failure is a timeout, not an error channel
-
-B never reports failure. If B crashes or never answers, A's tool aggregator —
-which was seeded with the full set of expected `tool_use_id`s from the LLM's
-request — reaches its deadline (`ASYNC_TOOL_TIMEOUT_MS`, default 5 minutes) and
-synthesizes a `status: "error"` result for the missing tool. Every `tool_use`
-block always gets a result, so the turn can never hang. The binding deadline is
-this aggregator timeout: B must answer within it (raise it if B legitimately
-needs longer).
-
-### One-shot delivery
-
-On a successful callback, B's `OutputConsumer` tombstones the reply route so the
-one-shot call cannot be double-delivered. The `reply-to` topic is also compacted
-with a time-based retention (`REPLY_TO_STATE_TTL_MS`, default 24 hours) so stale
-routes are eventually dropped. Retriable callback failures (5xx, timeouts) are
-retried with backoff; non-retriable ones (e.g. an expired token) are logged and
-skipped.
-
-## The callback endpoint
-
-Agent A's chat-api exposes:
-
-```
-POST /api/tools/response
-Authorization: Bearer <HMAC token>
-{ "result": <any JSON> }
-→ 202 Accepted
+```json
+// POST /api/tools/response  — sent back to Agent A
+// Host: agent-a-host:8000
+// Authorization: Bearer <the HMAC token>
+// Content-Type: application/json
+{
+  "result": "<B's answer>"
+}
 ```
 
-The token supplies the correlation fields, so the body only needs the result
-payload. Duplicate callbacks are safe — the aggregator dedupes by `tool_use_id`.
+### Response Message Type
+
+Agent A can ask Agent B to return a specific JSON shape, but B cannot guarantee
+it: an LLM is non-deterministic, so any structured-output contract may be
+violated. We therefore do **not** assume B treats A as a machine — we assume only
+that B can parse natural language. Consequently the response from B to A is
+modeled as a plain **string**, never a typed payload.
+
+### Failure Scenarios
+
+We must assume Agent B offers **no guarantee** of returning a result. It can
+crash, hang, or simply never answer, and — being a vanilla agent — it has no
+channel to report its own failure. So A cannot wait on B forever; it has to
+decide for itself when a missing result has become a failure.
+
+A's aggregator, `AggregateToolExecutionResultProcessor`, reads **two** topics. It
+consumes `think-request-response` as a seed — that gives it the full set of
+expected `tool_use_id`s (and `total_tools`) for the session — and it consumes
+`tool-use-result`, where each callback lands. State is accumulated per
+`session_id`. Once every expected `tool_use_id` has a result, it emits the
+complete set to `tool-use-all-complete` and the turn advances to the next think
+iteration.
+
+If a result never arrives, a wall-clock sweep — running every
+`TOOL_AGG_PUNCTUATE_INTERVAL_MS` (default 15s) — checks each session against its
+deadline (seed time + `ASYNC_TOOL_TIMEOUT_MS`, default 5 min). When the deadline
+passes with results still missing, the aggregator synthesizes a
+`{ status: "error", reason: "timeout" }` result for each missing `tool_use_id`
+and emits the now-complete set downstream. Every `tool_use` block always gets a
+result, so the turn can never hang.
+
+```
+    think-request-response topic         tool-use-result
+        (seeds expected set)          (callbacks land here)
+                  │                             │
+                  └──────────────┬──────────────┘
+                                 ▼
+                 AggregateToolExecutionResultProcessor
+                 (accumulates state per session_id)
+                                 │
+           ┌─────────────────────┴──────────────────────┐
+           ▼                                             ▼
+  all expected results arrived          sweep every TOOL_AGG_PUNCTUATE_INTERVAL_MS:
+  → emit right away                     now ≥ seed + ASYNC_TOOL_TIMEOUT_MS and
+           │                            still missing → synthesize
+           │                            { status: "error", reason: "timeout" }
+           │                                             │
+           └─────────────────────┬──────────────────────┘
+                                 ▼
+                      tool-use-all-complete topic
+                      (every tool_use_id now has a result)
+                                 │
+                                 ▼
+                         next think iteration
+```
 
 ## Configuration
 
 | Variable | Where | Default | Purpose |
 |----------|-------|---------|---------|
 | `TOOL_CALLBACK_SECRET` | A's tool service + A's chat-api | — | HMAC secret to sign/verify callback tokens |
-| `ASYNC_TOOL_TIMEOUT_MS` | A's processing | `300000` | How long to wait for a result before synthesizing an error |
-| `REPLY_TO_STATE_TTL_MS` | B's processing | `86400000` | Time-expiry for stored reply routes |
-| `REPLY_RETRY_MAX_MS` | B's chat-api | `120000` | Retry budget for delivering a callback |
+| `ASYNC_TOOL_TIMEOUT_MS` | A's processing | `300000` (5 minutes) | How long to wait for a result before synthesizing an error |
+| `TOOL_AGG_PUNCTUATE_INTERVAL_MS` | A's processing | `15000` (15 seconds) | How often the aggregator sweeps for timed-out sessions |
+| `REPLY_TO_STATE_TTL_MS` | B's processing | `86400000` (24 hours) | Time-expiry for stored reply routes |
+| `REPLY_RETRY_MAX_MS` | B's chat-api | `120000` (2 minutes) | Retry budget for delivering a callback |
 
 ## Example
 
