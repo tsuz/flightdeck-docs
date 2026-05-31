@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 1
 ---
 
 # Multi-Agent Communication
@@ -10,7 +10,7 @@ an ordinary agent and its answer flows back as the tool's result through a REST 
 — without A
 holding a thread open while B works.
 
-## Design
+## High Level Workflow
 
 Below is the design and assume two Flightdeck agents (Agent A and B) are used.
 
@@ -42,15 +42,6 @@ Below is the design and assume two Flightdeck agents (Agent A and B) are used.
 ```
 
 
-## Guiding Principals
-
-- Agent A treats Agent B as a generic async tool. Agent B treats the request as a generic chat. Neither needs to know the other is an agent.
-- Agent A cannot assume that Agent B has the deterministic ability to return its response in a specified format, such as a structured JSON schema. Therefore, a human-readable output—a plan string—is assumed.
-- Agent A and B do not share a Kafka cluster, nor are they allowed to access each other's topics.
-- Agent A and B do not share a language specific protocol.
-- Agent A needs to consider that Agent B can get stuck and response does not get returned.
-- Agent A assumes Agent B gets be compromised.
-
 ## Design choices
 
 ### Asynchronous dispatch
@@ -61,8 +52,12 @@ the "pending" ack. No consumer is held open for the duration of the
 sub-call. The result is published later, by the callback. This is what lets a
 delegated task take seconds or minutes without tying up A's tool consumer.
 
-Time flows downward; each column is one participant. `┃` = consumer occupied,
-`┊` = consumer freed.
+Async is chosen precisely so a long sub-call does not block the messages behind
+it in the same partition. A Kafka consumer processes a partition in order, so if
+the delegator held the consumer open while waiting on B, every subsequent
+`tool-use` in that partition would stall behind it. By returning immediately and
+committing the `tool-use` offset as early as possible, the partition keeps moving
+and progress is never lost to a slow or stuck sub-call.
 
 ```
      consumer            external            tool-use-result     tool-use            Agent A API         Agent B
@@ -170,7 +165,7 @@ narrow: by the time a duplicate result could arrive, A has already consumed the
 original tool result and moved on to the next iteration of thinking, so a late
 forged callback has nothing live to influence.
 
-### Stateful Reply is Stored on the Edge
+### Storing Stateful Reply Metadata
 
 B's chat-api stores the reply descriptor on its `reply-to` topic, keyed by
 `session_id`. It never enters B's prompt, and B has no "call back the caller"
