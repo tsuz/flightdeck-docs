@@ -6,9 +6,8 @@ sidebar_position: 1
 
 Flightdeck simplifies AI agent communication through a secure, reliable, and scalable design.
 The calling agent ("Agent A") delegates a task; the called agent ("Agent B") runs as
-an ordinary agent and its answer flows back as the tool's result through a REST API enpoint.
-— without A
-holding a thread open while B works.
+an ordinary agent and its answer flows back as the tool's result through a REST API
+endpoint — without A holding a thread open while B works.
 
 ## High Level Workflow
 
@@ -142,6 +141,7 @@ The token carries these correlation fields:
 | `tool_use_id` | the specific tool call to complete |
 | `tool_id`, `name` | the tool's identity |
 | `total_tools` | how many tools the turn is waiting on |
+| `agent` | the calling agent's name (who minted the token) |
 | `iat`, `exp` | issued-at / expiry (epoch seconds) |
 
 ```
@@ -154,16 +154,19 @@ Agent B never sees the secret — it cannot read, forge, or alter the token. B i
 blind courier that echoes the opaque token back. The HMAC is computed over the
 exact transmitted bytes, so JSON key ordering is irrelevant to verification.
 
-Even if the HMAC token is compromised on Agent B, Agent A can dedupe results by
+Even if the HMAC token is compromised on Agent B, Agent A dedupes results by
 `tool_use_id`: the first callback for a tool call is accepted and every
-subsequent one is ignored. A forged or replayed callback therefore can only race
+subsequent one is ignored. A forged or replayed callback can therefore only race
 a result A already has, which significantly lowers the chance of compromising the
 workflow.
 
-This dedupe is not yet in place. Even without it, though, the exposure is
-narrow: by the time a duplicate result could arrive, A has already consumed the
-original tool result and moved on to the next iteration of thinking, so a late
-forged callback has nothing live to influence.
+This dedupe is in place: the aggregator drops duplicate `tool_use_id`s both while
+a turn is still accumulating and, after it completes, for a short tombstone window
+(`TOOL_AGG_TOMBSTONE_TTL_MS`, default 60s) that absorbs late or replayed
+callbacks. The residual exposure is a replay that arrives only after the tombstone
+has been swept — and by then A has already consumed the original result and moved
+on to the next think iteration, so a late forged callback has nothing live to
+influence.
 
 ### Storing Stateful Reply Metadata
 
@@ -219,7 +222,8 @@ bound as sessions complete.
 > it to the delivery step.
 
 A tells B where to send the answer with a `reply` descriptor on the `/api/chat`
-request — **not** in the message content:
+request — **not** in the message content. Crucially, the descriptor names a
+*logical callback service*, never a URL:
 
 ```json
 // POST /api/chat  — received by Agent B
@@ -229,22 +233,34 @@ request — **not** in the message content:
   "session_id": "<a fresh session for B's sub-conversation>",
   "content": "<the task for B>",
   "reply": {
-    "type": "RESTAPI",
-    "endpoint": "https://agent-a-host:8000",
-    "method": "POST",
-    "path": "/api/tools/response",
-    "responseAsField": "result",
+    "callbackService": "my-agent-a",
     "bearerToken": "<the HMAC token>"
   }
 }
 ```
 
-The `reply` descriptor names the callback B hits when it finishes — A's
-`/api/tools/response` endpoint, carrying the HMAC token as a bearer credential:
+#### Callback routing is operator-controlled (SSRF-safe)
+
+The caller supplies only the service *name* (`callbackService`); it never supplies
+a URL. Agent B resolves that name to a base URL from its own operator-controlled
+config — the `ALLOWED_HOST_MAPPING` environment variable, a comma-separated list
+of `name:baseUrl` entries — and appends the fixed callback path
+`/api/tools/response`. The HTTP method (`POST`) and the response field (`result`)
+are likewise fixed by B, not chosen by the caller.
+
+Because the destination is chosen from operator config rather than caller input,
+an untrusted peer cannot steer B's callback at an arbitrary host: the SSRF
+primitive that an attacker-controlled `endpoint` would create is structurally
+removed. A `callbackService` that B is not configured for is rejected at
+`/api/chat` with a `400` (fail closed), so an unroutable reply never even reaches
+the `reply-to` topic.
+
+When B finishes, it POSTs to the resolved URL — A's `/api/tools/response` —
+carrying the HMAC token as a bearer credential and the answer under the fixed
+`result` field:
 
 ```json
-// POST /api/tools/response  — sent back to Agent A
-// Host: agent-a-host:8000
+// POST <resolved base URL>/api/tools/response  — sent back to Agent A
 // Authorization: Bearer <the HMAC token>
 // Content-Type: application/json
 {
@@ -315,8 +331,10 @@ result, so the turn can never hang.
 | `TOOL_CALLBACK_SECRET` | A's tool service + A's chat-api | — | HMAC secret to sign/verify callback tokens |
 | `ASYNC_TOOL_TIMEOUT_MS` | A's processing | `300000` (5 minutes) | How long to wait for a result before synthesizing an error |
 | `TOOL_AGG_PUNCTUATE_INTERVAL_MS` | A's processing | `15000` (15 seconds) | How often the aggregator sweeps for timed-out sessions |
+| `TOOL_AGG_TOMBSTONE_TTL_MS` | A's processing | `60000` (60 seconds) | How long a completed turn is kept as a tombstone to absorb late / duplicate callbacks |
 | `REPLY_TO_STATE_TTL_MS` | B's processing | `86400000` (24 hours) | Time-expiry for stored reply routes |
 | `REPLY_RETRY_MAX_MS` | B's chat-api | `120000` (2 minutes) | Retry budget for delivering a callback |
+| `ALLOWED_HOST_MAPPING` | B's chat-api | — | Allowlist of `name:baseUrl` entries (comma-separated) that resolves a `reply` descriptor's `callbackService` to a trusted base URL; the callback path is fixed. Unknown names are rejected (fail closed). |
 
 ## Example
 
