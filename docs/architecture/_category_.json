@@ -1,0 +1,10 @@
+{
+  "label": "Architecture",
+  "position": 2,
+  "collapsible": true,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "description": "How Flightdeck agents are put together and communicate."
+  }
+}
