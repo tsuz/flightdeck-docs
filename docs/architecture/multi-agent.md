@@ -104,7 +104,7 @@ this isn't about head-of-line stalls. The win is resource cost: the async
 version doesn't keep a consumer occupied — and an open connection to B — for the
 minutes a sub-call can take.
 
-### Securing Agent A from Agent B Callback
+### Secure communication between Agent A and B
 
 When Agent A dispatches to Agent B, it sends a message-specific token signed by
 the key stored in Agent A. The token carries the correlation fields A needs to
@@ -148,7 +148,7 @@ The token carries these correlation fields:
 token = base64url(payloadJson) "." base64url(HMAC_SHA256(secret, payloadJson))
 ```
 
-Only Agent A holds the secret (`TOOL_CALLBACK_SECRET`), on the two components
+Agent A holds the secret (`TOOL_CALLBACK_SECRET`), on the two components
 that need it: the tool service that **signs** and the chat-api that **verifies**.
 Agent B never sees the secret — it cannot read, forge, or alter the token. B is a
 blind courier that echoes the opaque token back. The HMAC is computed over the
@@ -160,13 +160,49 @@ subsequent one is ignored. A forged or replayed callback can therefore only race
 a result A already has, which significantly lowers the chance of compromising the
 workflow.
 
-This dedupe is in place: the aggregator drops duplicate `tool_use_id`s both while
-a turn is still accumulating and, after it completes, for a short tombstone window
-(`TOOL_AGG_TOMBSTONE_TTL_MS`, default 60s) that absorbs late or replayed
-callbacks. The residual exposure is a replay that arrives only after the tombstone
-has been swept — and by then A has already consumed the original result and moved
-on to the next think iteration, so a late forged callback has nothing live to
-influence.
+Agent A tells B where to send the answer with a `reply` descriptor on the `/api/chat`
+request — **not** in the message content. Crucially, the descriptor names a
+*logical callback service*, never a URL — letting the caller supply a raw URL
+would open an SSRF vector.
+
+```json
+// POST /api/chat  — received by Agent B
+// Host: agent-b-host:8000
+// Content-Type: application/json
+{
+  "session_id": "<a fresh session for B's sub-conversation>",
+  "content": "<the task for B>",
+  "reply": {
+    "callbackService": "my-agent-a",
+    "bearerToken": "<the HMAC token>"
+  }
+}
+```
+
+On Agent B, that service name must have a matching entry in `ALLOWED_HOST_MAPPING`
+(a comma-separated list of `name:baseUrl` pairs); B resolves the name to its base
+URL there, and a name with no mapping is rejected. For example:
+
+```
+ALLOWED_HOST_MAPPING=my-agent-a:http://agent-a-host:8000,other-agent:http://other-host:8000
+```
+
+This mapping is what makes Agent B *explicitly* trust Agent A: only services
+listed here can be named as a callback target. It also ensures the base URL
+resolves correctly back to Agent A from Agent B's network perspective.
+
+When B finishes, it POSTs to the resolved URL — A's `/api/tools/response` —
+carrying the HMAC token as a bearer credential and the answer under the fixed
+`result` field:
+
+```json
+// POST <resolved base URL>/api/tools/response  — sent back to Agent A
+// Authorization: Bearer <the HMAC token>
+// Content-Type: application/json
+{
+  "result": "<B's answer>"
+}
+```
 
 ### Storing Stateful Reply Metadata
 
@@ -221,60 +257,12 @@ bound as sessions complete.
 > the route there keeps cleanup next to the state it manages rather than deferring
 > it to the delivery step.
 
-A tells B where to send the answer with a `reply` descriptor on the `/api/chat`
-request — **not** in the message content. Crucially, the descriptor names a
-*logical callback service*, never a URL:
-
-```json
-// POST /api/chat  — received by Agent B
-// Host: agent-b-host:8000
-// Content-Type: application/json
-{
-  "session_id": "<a fresh session for B's sub-conversation>",
-  "content": "<the task for B>",
-  "reply": {
-    "callbackService": "my-agent-a",
-    "bearerToken": "<the HMAC token>"
-  }
-}
-```
-
-#### Callback routing is operator-controlled (SSRF-safe)
-
-The caller supplies only the service *name* (`callbackService`); it never supplies
-a URL. Agent B resolves that name to a base URL from its own operator-controlled
-config — the `ALLOWED_HOST_MAPPING` environment variable, a comma-separated list
-of `name:baseUrl` entries — and appends the fixed callback path
-`/api/tools/response`. The HTTP method (`POST`) and the response field (`result`)
-are likewise fixed by B, not chosen by the caller.
-
-Because the destination is chosen from operator config rather than caller input,
-an untrusted peer cannot steer B's callback at an arbitrary host: the SSRF
-primitive that an attacker-controlled `endpoint` would create is structurally
-removed. A `callbackService` that B is not configured for is rejected at
-`/api/chat` with a `400` (fail closed), so an unroutable reply never even reaches
-the `reply-to` topic.
-
-When B finishes, it POSTs to the resolved URL — A's `/api/tools/response` —
-carrying the HMAC token as a bearer credential and the answer under the fixed
-`result` field:
-
-```json
-// POST <resolved base URL>/api/tools/response  — sent back to Agent A
-// Authorization: Bearer <the HMAC token>
-// Content-Type: application/json
-{
-  "result": "<B's answer>"
-}
-```
-
 ### Response Message Type
 
 Agent A can ask Agent B to return a specific JSON shape, but B cannot guarantee
 it: an LLM is non-deterministic, so any structured-output contract may be
-violated. We therefore do **not** assume B treats A as a machine — we assume only
-that B can parse natural language. Consequently the response from B to A is
-modeled as a plain **string**, never a typed payload.
+violated. We therefore assume B can only output natural language, and so the
+response from B to A must be a **string**.
 
 ### Failure Scenarios
 
