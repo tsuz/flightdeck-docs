@@ -42,6 +42,65 @@ Below is the design and assume two Flightdeck agents (Agent A and B) are used.
 ```
 
 
+## What a dispatching tool must do
+
+A tool that hands its work to another agent is written differently from an
+ordinary tool: it must **not** compute and return a result. On each invocation it
+does four things, then returns:
+
+1. **Acknowledge as "pending," not "success."** Do not publish a
+   `tool-use-result`. Commit (ack) the `tool-use` offset so the dispatch is not
+   redelivered, but emit no result — the result arrives later, via the callback.
+   Calling the usual `success()` / `error()` would settle the tool call
+   immediately and defeat the asynchronous hand-off.
+
+2. **Mint the callback token.** Sign an HMAC token over the correlation fields
+   (`session_id`, `tool_use_id`, `tool_id`, `name`, `total_tools`, plus
+   `iat` / `exp`) with `TOOL_CALLBACK_SECRET`. That secret must be configured on
+   the tool service — the same value the chat-api uses to verify.
+
+3. **Hand the task to the other agent.** `POST` to the target agent's
+   `/api/chat` with a *fresh* `session_id` for the sub-conversation, the task as
+   `content`, and a transport-level `reply` descriptor pointing back at your
+   agent's `/api/tools/response` and carrying the token as `bearerToken`. The
+   `reply` object travels alongside `content`, never inside it.
+
+4. **Return immediately.** The tool is done. It holds no thread, no connection,
+   and no consumer open while the other agent works.
+
+```
+on tool-use(session_id, tool_use_id, tool_id, name, total_tools, input):
+    token   = sign({session_id, tool_use_id, tool_id, name, total_tools,
+                    iat, exp}, TOOL_CALLBACK_SECRET)
+    sub_sid = fresh_session_id()                 # B's own conversation
+    POST {AgentB}/api/chat {
+        session_id: sub_sid,
+        content:    input.task,                  # the natural-language task only
+        reply: { type: "RESTAPI", endpoint: "{AgentA}", method: "POST",
+                 path: "/api/tools/response", responseAsField: "result",
+                 bearerToken: token }
+    }
+    ack(tool_use offset)                         # "pending": commit, emit NO result
+    return
+```
+
+Everything after that is automatic: the other agent answers, its
+`OutputConsumer` POSTs the result to `/api/tools/response`, your chat-api verifies
+the token and writes the `tool-use-result`, and your aggregator completes the
+tool call (or times it out into an error if the other agent never answers).
+
+### What a dispatching tool must not do
+
+- **Don't settle synchronously** — no `success()` with a placeholder, and no
+  blocking or polling while waiting for the other agent.
+- **Don't give the other agent a "respond to caller" tool**, or rely on its LLM
+  to work out where to send the answer. Routing is transport, set by the `reply`
+  descriptor — the callee stays a vanilla agent.
+- **Don't put the callback URL or token in the message `content`** — the other
+  agent's prompt must never see them.
+- **Don't invent your own correlation scheme** — the token already carries
+  everything the aggregator needs to match the result back to the tool call.
+
 ## Design choices
 
 ### Asynchronous dispatch
