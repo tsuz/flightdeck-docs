@@ -12,7 +12,7 @@ holding a thread open while B works.
 
 ## High Level Workflow
 
-Below is the design and assume two Flightdeck agents (Agent A and B) are used.
+The design below assumes two Flightdeck agents (Agent A and Agent B).
 
 ```
   Agent A (caller)                         Agent B (callee — an ordinary agent)
